@@ -1,6 +1,6 @@
 # 🔍 Universal Barcode, QR & Data Matrix Scanner
 
-🤖 **Advanced Real-Time Scanner with Dynamic Dot-Peen (DPM) Processing Capabilities**
+🤖 **Advanced Computer Vision Scanner featuring Live Webcam Streaming & Static Image Decoding with Dynamic Dot-Peen (DPM) Support.**
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -10,28 +10,26 @@
 
 ## 💡 Overview
 
-Standard scanning engines often fail when reading codes marked directly onto industrial metals or textured surfaces (known as **Dot-Peen** or **Direct Part Marking**). 
+Standard scanning engines struggle with barcodes and matrices engraved directly onto industrial metals, plastic textures, or bumpy materials (known as **Dot-Peen** or **Direct Part Marking**). 
 
-This application implements an intelligent **Dual-Pass Scanning Strategy** using computer vision techniques to dynamically adapt to both pristine printed codes and heavily textured industrial surfaces in real time.
+This toolkit uses an intelligent **Dual-Pass Strategy** to handle everything from pristine digital barcodes to heavily textured industrial markings across two distinct script interfaces.
 
-### ⚙️ How the Dual-Pass Engine Works
-1. **Pass 1 (Standard Mode):** The frame is processed in native grayscale and fed directly to the `zxingcpp` engine. This ensures sub-millisecond, low-latency performance for traditional barcodes and QR codes.
-2. **Pass 2 (Dot-Peen Mode):** If Pass 1 returns zero results, the system instantly engages heavy computer vision pipelines (Gaussian Filtering $\rightarrow$ Adaptive Thresholding $\rightarrow$ Morphological Dilation) to bridge detached dot-peen micro-indents into solid, readable shapes before running the decoder again.
-
----
-
-## 🛠️ Tech Stack & Requirements
-
-* **Core Language:** Python 3.10+
-* **Computer Vision:** OpenCV (`opencv-python`)
-* **Mathematical Operations:** NumPy
-* **Decoding Engine:** ZXing-C++ (`zxing-cpp`)
+### ⚙️ The Dual-Pass Engine
+* **Pass 1 (Standard Mode):** Instant, ultra-low-latency scanning for traditional printed barcodes and QR codes.
+* **Pass 2 (Dot-Peen Mode):** If Pass 1 finds nothing, the engine applies specialized image transformations (Gaussian Blur $\rightarrow$ Adaptive Thresholding $\rightarrow$ Morphological Dilation/Closing) to bridge isolated dot indents into solid, readable code shapes.
 
 ---
 
-## 📦 Getting Started & Installation
+## 🛠️ Tech Stack
 
-### 1. Clone the Space
+* **Language:** Python 3.10+
+* **Libraries:** OpenCV (`opencv-python`), NumPy, ZXing-C++ (`zxing-cpp`)
+
+---
+
+## 📦 Quick Start & Installation
+
+### 1. Clone & Navigate
 ```bash
 git clone [https://github.com/ashwin-hamsaneni/Universal-bar-qr-data_matrix-scanner.git](https://github.com/ashwin-hamsaneni/Universal-bar-qr-data_matrix-scanner.git)
 cd Universal-bar-qr-data_matrix-scanner
