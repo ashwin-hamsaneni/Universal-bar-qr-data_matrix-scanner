@@ -107,6 +107,6 @@ def scan_universal_image(image_path):
 
 if __name__ == "__main__":
     # Test it by changing this path to ANY image you want to scan!
-    image_to_scan = "c:/Users/HP/Desktop/internship_task/WhatsApp Image 2026-06-22 at 1.03.02 PM.jpeg"
+    image_to_scan = r"C:\Users\HP\Downloads\28102439.png"
     
     scan_universal_image(image_to_scan)
