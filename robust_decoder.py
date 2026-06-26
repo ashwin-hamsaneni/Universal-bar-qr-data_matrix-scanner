@@ -40,17 +40,28 @@ Install
     #   Windows:        DLLs ship inside the pip wheels for both, usually
     #                   no extra step needed.
 
-Usage
------
-    from robust_decoder import CodeDecoder
+Usage (no CLI needed)
+----------------------
+    Just scroll to the bottom of this file, edit the CONFIG dict (set
+    INPUT_PATH to an image or a folder of images, and OUTPUT_DIR for where
+    annotated results go), then hit Run in your editor — or:
 
-    decoder = CodeDecoder()
-    results = decoder.decode_file("pcb_marking.png", save_annotated="pcb_marking_decoded.png")
-    for r in results:
-        print(r.format, r.text, r.engine, r.variant)
+        python robust_decoder.py
 
-    # Or just the CLI:
-    python robust_decoder.py path/to/image.png --debug-dir ./debug_out --save-annotated ./decoded.png
+    with no arguments at all. INPUT_PATH can point at a single file or a
+    whole folder (every image in it gets processed in one go).
+
+    Prefer to call it from your own code instead?
+
+        from robust_decoder import CodeDecoder
+
+        decoder = CodeDecoder()
+        results = decoder.decode_file("pcb_marking.png", save_annotated="pcb_marking_decoded.png")
+        for r in results:
+            print(r.format, r.text, r.engine, r.variant)
+
+    A traditional CLI (argparse, flags) is still available if you do pass
+    command-line arguments — see main_cli() near the bottom of this file.
 """
 
 from __future__ import annotations
@@ -331,11 +342,12 @@ def _engine_zxingcpp(img: np.ndarray, variant: str, rotation: float) -> List[Dec
         pil_img = Image.fromarray(img)
         results = zxingcpp.read_barcodes(
             pil_img,
-            formats=zxingcpp.BarcodeFormat.LinearCodes
-            | zxingcpp.BarcodeFormat.DataMatrix
-            | zxingcpp.BarcodeFormat.QRCode
-            | zxingcpp.BarcodeFormat.Aztec,
-            try_harder=True,
+            formats=[
+                zxingcpp.BarcodeFormat.LinearCodes,
+                zxingcpp.BarcodeFormat.DataMatrix,
+                zxingcpp.BarcodeFormat.QRCode,
+                zxingcpp.BarcodeFormat.Aztec,
+            ],
             try_rotate=True,
             try_invert=True,
             try_downscale=True,
@@ -366,6 +378,18 @@ def _engine_zxingcpp(img: np.ndarray, variant: str, rotation: float) -> List[Dec
                         source_image=img,
                     )
                 )
+    except TypeError as e:
+        # A TypeError here means the call signature itself is wrong (e.g. an
+        # installed zxingcpp version that doesn't support a kwarg we passed)
+        # — that's a setup bug, not a normal per-image decode miss, and
+        # silently swallowing it would hide every single decode behind a
+        # misleading "no code found". Surface it loudly, once.
+        logger.error(
+            "zxingcpp.read_barcodes() call failed with TypeError — this usually means the "
+            "installed zxingcpp version's API doesn't match what this script expects. "
+            "Check `pip show zxing-cpp` and the error below:\n%s",
+            e,
+        )
     except Exception as e:  # noqa: BLE001
         logger.debug("zxingcpp failed on variant=%s rot=%s: %s", variant, rotation, e)
     return out
@@ -796,11 +820,111 @@ class CodeDecoder:
 
 
 # ==========================================================================
-# CLI
+# RUN IT — no CLI required
+# ==========================================================================
+# Just edit the values below and hit Run (e.g. the green "Run Python File"
+# button in VS Code, or `python robust_decoder.py` with no arguments).
+#
+# INPUT_PATH can be either:
+#   - a single image file  -> decodes that one file
+#   - a folder              -> decodes every image file inside it (batch mode)
+#
+# argparse/CLI usage still works too if you prefer it (see main_cli() below)
+# — running with command-line arguments takes priority over the config
+# block, so nothing here breaks your existing scripts/CI calls.
+# ==========================================================================
+
+CONFIG = {
+    # --- EDIT THESE ---
+    "INPUT_PATH": r"C:\Users\HP\Downloads\WhatsApp Image 2026-06-19 at 5.44.12 PM.jpeg",   # file OR folder
+    "OUTPUT_DIR": r"C:\Users\HP\Downloads\decoded_out",  # annotated images go here
+    "DEBUG_DIR": None,        # e.g. r"...\debug_out" to dump every preprocessing variant tried
+    "TIME_BUDGET_S": 20.0,    # max seconds spent per image before giving up
+    "ANNOTATE_ALL": False,    # True = save one annotated image per symbol if multiple found per frame
+    "VERBOSE": False,         # True = print debug-level logs for every engine/variant attempt
+    # ------------------
+}
+
+_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
+
+
+def _process_one(decoder: "CodeDecoder", image_path: Path, output_dir: Path) -> List[DecodeResult]:
+    annotated_path = output_dir / f"{image_path.stem}_decoded.png"
+    t0 = time.monotonic()
+    results = decoder.decode_file(
+        str(image_path), save_annotated=str(annotated_path), annotate_all=CONFIG["ANNOTATE_ALL"]
+    )
+    elapsed = time.monotonic() - t0
+
+    if not results:
+        print(f"[FAIL]    {image_path.name}  ({elapsed:.2f}s) — no code decoded")
+    else:
+        for r in results:
+            print(
+                f"[SUCCESS] {image_path.name}  ({elapsed:.2f}s)  "
+                f"format={r.format}  engine={r.engine}  variant={r.variant}  rotation={r.rotation}"
+            )
+            print(f"          text={r.text!r}")
+    return results
+
+
+def run(config: dict = CONFIG) -> dict:
+    """
+    The no-CLI entry point. Reads everything from `config` (defaults to the
+    CONFIG dict above — edit that dict directly, or pass your own here if
+    importing this module from another script).
+
+    Returns {image_path_str: [DecodeResult, ...]} for every image processed
+    (empty list value = that image failed to decode).
+    """
+    logging.basicConfig(
+        level=logging.DEBUG if config["VERBOSE"] else logging.INFO,
+        format="%(levelname)s: %(message)s",
+    )
+
+    input_path = Path(config["INPUT_PATH"])
+    output_dir = Path(config["OUTPUT_DIR"])
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    decoder = CodeDecoder(time_budget_s=config["TIME_BUDGET_S"], debug_dir=config["DEBUG_DIR"])
+
+    all_results: dict = {}
+
+    if not input_path.exists():
+        print(f"INPUT_PATH does not exist: {input_path}")
+        print("Edit the CONFIG dict near the bottom of robust_decoder.py and try again.")
+        return all_results
+
+    if input_path.is_dir():
+        image_files = sorted(
+            p for p in input_path.iterdir() if p.suffix.lower() in _IMAGE_EXTENSIONS
+        )
+        if not image_files:
+            print(f"No image files found in {input_path}")
+            return all_results
+        print(f"Batch mode: found {len(image_files)} image(s) in {input_path}\n")
+        n_success = 0
+        for image_path in image_files:
+            results = _process_one(decoder, image_path, output_dir)
+            all_results[str(image_path)] = results
+            n_success += bool(results)
+        print(f"\nDone: {n_success}/{len(image_files)} decoded successfully.")
+        print(f"Annotated images saved to: {output_dir}")
+    else:
+        results = _process_one(decoder, input_path, output_dir)
+        all_results[str(input_path)] = results
+        print(f"\nAnnotated image saved to: {output_dir}")
+
+    return all_results
+
+
+# ==========================================================================
+# Optional CLI (only used if you actually pass command-line arguments —
+# running with none at all falls through to the CONFIG-driven run() above)
 # ==========================================================================
 
 
-def main():
+def main_cli():
     parser = argparse.ArgumentParser(description="Robust DataMatrix/QR/barcode decoder")
     parser.add_argument("image", help="Path to image file")
     parser.add_argument("--debug-dir", default=None, help="Dump every preprocessing variant here")
@@ -844,4 +968,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1:
+        # command-line arguments were given -> use the argparse CLI
+        main_cli()
+    else:
+        # no arguments -> just run off the CONFIG dict above. This is the
+        # "hit the Run button in my editor" path.
+        run()
