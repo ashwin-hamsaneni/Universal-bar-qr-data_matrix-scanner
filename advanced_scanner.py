@@ -183,5 +183,5 @@ class AdvancedDataMatrixDecoder:
 if __name__ == "__main__":
     scanner = AdvancedDataMatrixDecoder()
 
-    test_image = "c:/Users/HP/Downloads/Why-Add-a-QR-Code-PCB.jpg"
+    test_image = r"C:\Users\HP\Downloads\WhatsApp Image 2026-06-26 at 11.40.38 AM.jpeg"
     scanner.scan_image(test_image)
